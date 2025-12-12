@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Star, Flame, Beer, Moon, Utensils, Zap, X, Heart, Share2, ThumbsUp, Check } from 'lucide-react';
+import { MapPin, Star, Flame, Beer, Moon, Utensils, Zap, X, Heart, Share2, ThumbsUp, Check, RotateCcw } from 'lucide-react';
 import { StatBar } from './components/StatBar';
-import { Place, Category, PlaceStats, VoteState, LikedState, MyVotesState } from './types';
+import { Place, Category, PlaceStats, VoteState, LikedState } from './types';
 
 // Dummy Data
 const placesData: Place[] = [
@@ -86,10 +86,11 @@ const HapjeongMobileVote: React.FC = () => {
   const [mounted, setMounted] = useState<boolean>(false);
   const [liked, setLiked] = useState<LikedState>({});
   
-  // 투표 상태 관리 (초기값은 가상의 데이터)
+  // 투표 상태 관리
   const [votes, setVotes] = useState<VoteState>({ 1: 42, 2: 28, 3: 56, 4: 31, 5: 19, 6: 24 });
-  const [myVotes, setMyVotes] = useState<MyVotesState>({}); // 내가 투표했는지 여부
-  const [showToast, setShowToast] = useState<string | false>(false); // 투표 완료 알림
+  // 1인 1투표: 현재 내가 투표한 Place ID (없으면 null)
+  const [myPick, setMyPick] = useState<number | null>(null);
+  const [showToast, setShowToast] = useState<string | false>(false);
 
   useEffect(() => {
     setMounted(true);
@@ -104,25 +105,42 @@ const HapjeongMobileVote: React.FC = () => {
   // 투표 핸들러
   const handleVote = (e: React.MouseEvent, id: number, name: string) => {
     e.stopPropagation();
-    if (myVotes[id]) return; // 이미 투표했으면 중단
 
+    // 1. 이미 투표한 곳을 다시 누르면 취소
+    if (myPick === id) {
+        setVotes(prev => ({ ...prev, [id]: Math.max(0, (prev[id] || 0) - 1) }));
+        setMyPick(null);
+        triggerToast("투표가 취소되었습니다. 다시 선택해주세요!");
+        return;
+    }
+
+    // 2. 다른 곳에 이미 투표한 상태라면 경고
+    if (myPick !== null) {
+        triggerToast("1인당 1곳만 투표 가능합니다. (기존 투표 취소 필요)");
+        return;
+    }
+
+    // 3. 투표하기
     setVotes(prev => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
-    setMyVotes(prev => ({ ...prev, [id]: true }));
-    
-    // 토스트 알림 표시
-    setShowToast(`${name}에 한 표를 던졌습니다!`);
-    setTimeout(() => setShowToast(false), 2000);
+    setMyPick(id);
+    triggerToast(`${name}에 한 표를 던졌습니다!`);
   };
+
+  const triggerToast = (msg: string) => {
+      setShowToast(msg);
+      // 기존 타이머 클리어 로직은 생략하고 간단히 2초 뒤 숨김 처리
+      setTimeout(() => setShowToast(false), 2000);
+  }
 
   const filteredPlaces = activeCategory === 'all' 
     ? placesData 
     : placesData.filter(place => place.category === activeCategory);
 
   return (
-    <div className={`min-h-screen bg-slate-50 text-slate-800 font-sans transition-opacity duration-700 pb-20 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
+    <div className={`min-h-screen bg-slate-50 text-slate-800 font-sans transition-opacity duration-700 pb-24 ${mounted ? 'opacity-100' : 'opacity-0'}`}>
       
       {/* Mobile Sticky Nav */}
-      <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center shadow-sm">
+      <nav className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 h-[56px] flex justify-between items-center shadow-sm">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-blue-200 shadow-lg">H</div>
           <span className="font-bold text-lg tracking-tight">Hapjeong<span className="text-blue-600">.Vote</span></span>
@@ -132,26 +150,28 @@ const HapjeongMobileVote: React.FC = () => {
         </div>
       </nav>
 
-      {/* Hero & Filters */}
-      <header className="pt-8 pb-4 px-4 bg-white">
+      {/* Hero Section */}
+      <header className="pt-6 pb-2 px-4 bg-white">
         <h1 className="text-3xl font-black mb-2 leading-tight text-slate-900">
           오늘의 회식 장소,<br />
           <span className="text-blue-600">직접 투표</span>하세요.
         </h1>
-        <p className="text-slate-500 text-sm mb-6">
+        <p className="text-slate-500 text-sm mb-4">
           MZ 감성과 40대의 품격을 모두 갖춘 합정 핫플.
         </p>
+      </header>
 
-        {/* Mobile-Optimized Horizontal Scroll Filters */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 -mx-4 px-4">
+      {/* Sticky Filter Bar */}
+      <div className="sticky top-[56px] z-30 bg-white/95 backdrop-blur-md border-b border-slate-100 px-4 py-3 shadow-sm">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-300 ${
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-300 ${
                 activeCategory === cat.id
-                  ? 'bg-slate-900 text-white shadow-lg scale-105'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  ? 'bg-slate-900 text-white shadow-md'
+                  : 'bg-slate-100 text-slate-500 active:bg-slate-200'
               }`}
             >
               {cat.icon}
@@ -159,16 +179,22 @@ const HapjeongMobileVote: React.FC = () => {
             </button>
           ))}
         </div>
-      </header>
+      </div>
 
       {/* Main List */}
-      <main className="px-4 py-4 max-w-7xl mx-auto">
+      <main className="px-4 py-6 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredPlaces.map((place) => (
+          {filteredPlaces.map((place) => {
+             const isSelected = myPick === place.id;
+             const isDisabled = myPick !== null && !isSelected;
+
+             return (
             <div
               key={place.id}
               onClick={() => setSelectedPlace(place)}
-              className="bg-white rounded-2xl overflow-hidden shadow-sm border border-slate-100 active:scale-[0.98] transition-transform duration-200 cursor-pointer"
+              className={`bg-white rounded-2xl overflow-hidden shadow-sm border transition-all duration-200 cursor-pointer ${
+                  isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-slate-100'
+              } ${isDisabled ? 'opacity-60 grayscale-[0.3]' : 'active:scale-[0.98]'}`}
             >
               {/* Card Image */}
               <div className="relative h-52 bg-slate-200">
@@ -195,9 +221,13 @@ const HapjeongMobileVote: React.FC = () => {
                     <h2 className="text-xl font-bold leading-none">{place.name}</h2>
                   </div>
                   
-                  {/* Vote Count Badge on Card */}
-                  <div className="flex items-center gap-1 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg text-white text-xs font-bold border border-white/20">
-                    <ThumbsUp size={12} className="text-blue-400" />
+                  {/* Vote Count Badge */}
+                  <div className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold border backdrop-blur-md transition-colors ${
+                      isSelected 
+                        ? 'bg-blue-600 text-white border-blue-400' 
+                        : 'bg-black/40 text-white border-white/20'
+                  }`}>
+                    <ThumbsUp size={12} className={isSelected ? 'text-white' : 'text-blue-400'} />
                     <span>{votes[place.id]}표</span>
                   </div>
                 </div>
@@ -220,25 +250,29 @@ const HapjeongMobileVote: React.FC = () => {
                 {/* Vote Button Block */}
                 <button
                   onClick={(e) => handleVote(e, place.id, place.name)}
-                  className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all ${
-                    myVotes[place.id] 
-                      ? 'bg-blue-50 text-blue-600 border border-blue-200 cursor-default'
-                      : 'bg-slate-900 text-white shadow-md hover:bg-slate-800 active:scale-95'
+                  className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm transition-all shadow-sm ${
+                    isSelected 
+                      ? 'bg-white text-red-500 border border-red-200 hover:bg-red-50'
+                      : isDisabled
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-900 text-white hover:bg-slate-800'
                   }`}
                 >
-                  {myVotes[place.id] ? (
+                  {isSelected ? (
                     <>
-                      <Check size={16} /> 투표 완료
+                      <RotateCcw size={16} /> 투표 취소하기
                     </>
                   ) : (
                     <>
-                      <ThumbsUp size={16} /> 여기로 가자!
+                      {isDisabled ? <X size={16} /> : <ThumbsUp size={16} />} 
+                      {isDisabled ? '투표 불가 (다른 곳 선택됨)' : '여기로 가자!'}
                     </>
                   )}
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </main>
 
@@ -301,12 +335,23 @@ const HapjeongMobileVote: React.FC = () => {
                  <button 
                    onClick={(e) => handleVote(e, selectedPlace.id, selectedPlace.name)}
                    className={`flex-1 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 ${
-                    myVotes[selectedPlace.id]
-                      ? 'bg-blue-100 text-blue-700 cursor-default'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
+                    myPick === selectedPlace.id
+                      ? 'bg-red-50 text-red-600 border border-red-200'
+                      : myPick !== null
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
                    }`}
                  >
-                    {myVotes[selectedPlace.id] ? '투표 완료됨' : '여기로 투표하기'}
+                    {myPick === selectedPlace.id ? (
+                        <>
+                            <RotateCcw size={16} /> 투표 취소
+                        </>
+                    ) : (
+                        <>
+                           {myPick !== null ? <X size={16}/> : <ThumbsUp size={16} />}
+                           {myPick !== null ? '투표 불가' : '여기로 투표하기'}
+                        </>
+                    )}
                  </button>
                  <button className="px-4 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600">
                     <Share2 size={18} />
@@ -320,7 +365,7 @@ const HapjeongMobileVote: React.FC = () => {
       {/* Toast Notification */}
       <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 ${showToast ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0'}`}>
         <div className="bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 text-sm font-bold whitespace-nowrap">
-          <Check size={16} className="text-green-400" />
+          {showToast && showToast.includes('취소') ? <RotateCcw size={16} className="text-red-400" /> : <Check size={16} className="text-green-400" />}
           {showToast}
         </div>
       </div>

@@ -31,7 +31,3 @@ export interface VoteState {
 export interface LikedState {
   [key: number]: boolean;
 }
-
-export interface MyVotesState {
-  [key: number]: boolean;
-}
